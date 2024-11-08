@@ -15,25 +15,34 @@ import (
 )
 
 //TODO:
-//
 // potential concurrency
-//
-//
+// async user input
+// add spatial partitioning to Set_Flock function
 //
 
 var (
+
+	//game adjustments
 	coherence_factor float64 = 0.04 //centering
 	alignment_factor float64 = 0.09 //allignment
 	avoidance_factor float64 = 0.05 //seperation
-	avoid_radius     float64 = 30
-	coher_radius     float64 = 100
-	max_speed        float64 = 20
-	turn_factor      float64 = 2 //how fast to return a cell that escaped
-	turn_margin      float64 = 100
+	avoid_radius     float64 = 20   //30
+	coher_radius     float64 = 75   //100
+	max_speed        float64 = 15
+	turn_factor      float64 = 1   // 2//how fast to return a cell that escaped
+	turn_margin      float64 = 200 //100
+	init_boids       int     = 3000
 
-	workers    int
-	fps_target int = 60
-	init_boids int = 1000
+	//program adjustments
+	//workers    int     = 2
+	fps_target int     = 60
+	scale      float64 = 2
+	x_bound    float64 = float64(width) * scale
+	y_bound    float64 = float64(height) * scale
+
+	//screen
+	width  int32 = 2400
+	height int32 = 1400
 )
 
 type Boid struct {
@@ -42,8 +51,7 @@ type Boid struct {
 	Acceleration Tuple
 	Velocity     Tuple // velocity
 	Avoid_Range  float64
-	Follow_Range float64           // visual range
-	Flock        map[*Boid]float64 // optimise assigning this
+	Follow_Range float64 // visual range
 
 	Precieved_Center   Tuple
 	Precieved_Velocity Tuple
@@ -81,7 +89,7 @@ func (g *Game) Run() {
 		rl.ClearBackground(rl.Black)
 
 		for _, boid := range g.Entities {
-			Draw_Boid(boid, 15)
+			Draw_Boid(boid, 15/scale, scale)
 		}
 
 		rl.EndDrawing()
@@ -95,12 +103,12 @@ func (g *Game) Run() {
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	workers = runtime.NumCPU() // num of threads
+	//workers = runtime.NumCPU() // num of threads
 
 	game := Game{
 		FPS_Target: int32(fps_target),
-		Width:      2400,
-		Height:     1400,
+		Width:      width,
+		Height:     height,
 		Title:      "Boids",
 	}
 
@@ -122,7 +130,6 @@ func (g *Game) Init_Boids(numBoids int) {
 			Velocity:     Tuple{X: float64(rand.Intn(40) - 20), Y: float64(rand.Intn(40) - 20)},
 			Follow_Range: coher_radius * coher_radius,
 			Avoid_Range:  avoid_radius * coher_radius,
-			Flock:        make(map[*Boid]float64),
 		}
 		g.Entities = append(g.Entities, b)
 	}
@@ -158,7 +165,7 @@ func (g *Game) Evolve_Game(boids *[]*Boid) {
 		g.Maintain_Bounds(b)
 
 	}
-	fmt.Printf("Evolution too %d ms \n", time.Since(now).Microseconds())
+	fmt.Printf("Evolution took %d us \n", time.Since(now).Microseconds())
 
 }
 
@@ -198,8 +205,10 @@ func (g *Game) Set_Flock(b *Boid, boids *[]*Boid) { // assign the distances betw
 	entities := *boids
 	i := b.Id
 	for j := 0; j < len(entities); j++ {
-		if j != i {
-			r := (Distance_Squared(entities[j].Position, b.Position)) //the distance is squared to save on compute.
+		dy := entities[j].Position.Y - b.Position.Y
+		dx := entities[j].Position.X - b.Position.X
+		if j != i && (b.Follow_Range > max(-dy, dy) && b.Follow_Range > max(dx, -dy)) {
+			r := dx*dx + dy*dy //the distance is squared to save on compute.
 			g.Distances[i][j] = r
 			g.Distances[j][i] = r
 		}
@@ -295,20 +304,21 @@ func (g *Game) Maintain_Bounds(b *Boid) { // boids cannot leave the screen
 
 	if b.Position.X < turn_margin {
 		b.Velocity.X += turn_factor
-	} else if b.Position.X-turn_margin > float64(g.Width) {
+	} else if b.Position.X > x_bound-turn_margin {
 		b.Velocity.X -= turn_factor
 	}
 
 	if b.Position.Y < turn_margin {
 		b.Velocity.Y += turn_factor
-	} else if b.Position.Y-turn_margin > float64(g.Height) {
+	} else if b.Position.Y > y_bound-turn_margin {
 		b.Velocity.Y -= turn_factor
 	}
 }
 
-func Draw_Boid(b *Boid, scale float64) { // draw triangle boids facing in the direction of motion
+func Draw_Boid(b *Boid, scale float64, game_scale float64) { // draw triangle boids facing in the direction of motion
 
-	x, y := b.Position.X, b.Position.Y
+	x, y := b.Position.X/game_scale, b.Position.Y/game_scale
+
 	alpha := math.Atan2(b.Velocity.Y, b.Velocity.X)
 	rl.DrawTriangle(
 		rl.Vector2{X: float32(x + scale*math.Cos(alpha)), Y: float32(y + scale*math.Sin(alpha))}, //tip
