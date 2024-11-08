@@ -36,6 +36,7 @@ var (
 )
 
 type Boid struct {
+	Id           int
 	Position     Tuple // position
 	Velocity     Tuple // velocity
 	Avoid_Range  float64
@@ -108,8 +109,11 @@ func main() {
 }
 
 func (g *Game) Init_Boids(numBoids int) {
+	g.Distances = make([][]float64, numBoids)
 	for i := 0; i < numBoids; i++ {
+		g.Distances[i] = make([]float64, numBoids) // imitiate distance matrix
 		b := &Boid{
+			Id:           i,
 			Position:     Tuple{X: float64(rand.Intn(int(g.Width/2)) + int(g.Width)/4), Y: float64(rand.Intn(int(g.Height/2)) + int(g.Height)/4)},
 			Velocity:     Tuple{X: float64(rand.Intn(40) - 20), Y: float64(rand.Intn(40) - 20)},
 			Follow_Range: coher_radius,
@@ -118,6 +122,7 @@ func (g *Game) Init_Boids(numBoids int) {
 		}
 		g.Entities = append(g.Entities, b)
 	}
+
 }
 
 func (g *Game) Evolve_Game(boids *[]*Boid) {
@@ -125,15 +130,15 @@ func (g *Game) Evolve_Game(boids *[]*Boid) {
 	var sep, al, coh Tuple // seperation alignment and choesion vectors
 
 	//now := time.Now()
-	Set_Centers(boids)
-	Set_Velocities(boids)
+	g.Set_Centers(boids)
+	g.Set_Velocities(boids)
 	//fmt.Printf("setting took %d ms", time.Since(now).Milliseconds())
 
 	now := time.Now()
 	for _, b := range *boids {
 
-		Set_Flock(boids)
-		sep = Seperation(b, avoidance_factor)
+		g.Set_Flock(boids)
+		sep = g.Seperation(b, avoidance_factor)
 		al = Alignment(b, alignment_factor)
 		coh = Cohesion(b, coherence_factor)
 
@@ -153,26 +158,27 @@ func (g *Game) Evolve_Game(boids *[]*Boid) {
 
 }
 
-func Set_Flock(boids *[]*Boid) { // assign the distances between the boids (distance is symmetric)
+func (g *Game) Set_Flock(boids *[]*Boid) { // assign the distances between the boids (distance is symmetric)
 
 	for i, b := range *boids {
 		for j, a := range *boids {
 			if i > j {
 				r := math.Sqrt(Distance_Squared(a.Position, b.Position)) //the distance is squared to save on compute.
-				a.Flock[b] = r
-				b.Flock[a] = r
+				g.Distances[i][j] = r
+				g.Distances[j][i] = r
 			}
 
 		}
 	}
 }
 
-func Set_Centers(boids *[]*Boid) { // sets the precieved center of mass for each boid
+func (g *Game) Set_Centers(boids *[]*Boid) { // sets the precieved center of mass for each boid
 
-	for _, b := range *boids {
+	for i, b := range *boids {
 		c_m := Tuple{0, 0}
 		m := 0
-		for a, r := range b.Flock {
+		for j, r := range g.Distances[i] {
+			a := g.Entities[j]
 			if r < b.Follow_Range {
 				c_m.X += a.Position.X
 				c_m.Y += a.Position.Y
@@ -189,12 +195,13 @@ func Set_Centers(boids *[]*Boid) { // sets the precieved center of mass for each
 	}
 }
 
-func Set_Velocities(boids *[]*Boid) { // sets the precieved average velocity for each boid // can be optimised O(n^2)
+func (g *Game) Set_Velocities(boids *[]*Boid) { // sets the precieved average velocity for each boid // can be optimised O(n^2)
 
-	for _, b := range *boids {
+	for i, b := range *boids {
 		c_v := Tuple{0, 0}
 		m := 0
-		for a, r := range b.Flock {
+		for j, r := range g.Distances[i] {
+			a := g.Entities[j]
 			if r < b.Follow_Range {
 				c_v.X += a.Velocity.X
 				c_v.Y += a.Velocity.Y
@@ -222,11 +229,12 @@ func Cohesion(b *Boid, f float64) Tuple { //boids stick together as flocks
 
 }
 
-func Seperation(b *Boid, f float64) Tuple {
+func (g *Game) Seperation(b *Boid, f float64) Tuple { // boids cant be too cloes together
 
 	s := Tuple{0, 0}
-
-	for a, r := range b.Flock {
+	i := b.Id
+	for j, r := range g.Distances[i] {
+		a := g.Entities[j]
 		if r < b.Avoid_Range {
 			s = Tuple{s.X - (a.Position.X - b.Position.X), s.Y - (a.Position.Y - b.Position.Y)}
 		}
