@@ -43,3 +43,8 @@ func Norm_Squared(a Tuple) float64 {
 
 	return a.X*a.X + a.Y*a.Y
 }
+
+func Scale(a *Tuple, f float64) {
+	a.X *= f
+	a.Y *= f
+}

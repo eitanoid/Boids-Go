@@ -2,21 +2,21 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
-	"sync"
-	"time"
-
-	"log"
 	"net/http"
 	_ "net/http/pprof"
+	"runtime"
+	"sync"
+	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 //TODO:
 //
-//
+// potential concurrency
 //
 //
 //
@@ -25,19 +25,21 @@ var (
 	coherence_factor float64 = 0.04 //centering
 	alignment_factor float64 = 0.09 //allignment
 	avoidance_factor float64 = 0.05 //seperation
-	avoid_radius     float64 = 50
+	avoid_radius     float64 = 30
 	coher_radius     float64 = 100
 	max_speed        float64 = 20
-	turn_factor      float64 = 4 //how fast to return a cell that escaped
-	turn_margin      float64 = 20
+	turn_factor      float64 = 2 //how fast to return a cell that escaped
+	turn_margin      float64 = 100
 
+	workers    int
 	fps_target int = 60
-	init_boids int = 150
+	init_boids int = 1000
 )
 
 type Boid struct {
 	Id           int
 	Position     Tuple // position
+	Acceleration Tuple
 	Velocity     Tuple // velocity
 	Avoid_Range  float64
 	Follow_Range float64           // visual range
@@ -92,6 +94,8 @@ func (g *Game) Run() {
 }
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
+	workers = runtime.NumCPU() // num of threads
 
 	game := Game{
 		FPS_Target: int32(fps_target),
@@ -116,8 +120,8 @@ func (g *Game) Init_Boids(numBoids int) {
 			Id:           i,
 			Position:     Tuple{X: float64(rand.Intn(int(g.Width/2)) + int(g.Width)/4), Y: float64(rand.Intn(int(g.Height/2)) + int(g.Height)/4)},
 			Velocity:     Tuple{X: float64(rand.Intn(40) - 20), Y: float64(rand.Intn(40) - 20)},
-			Follow_Range: coher_radius,
-			Avoid_Range:  avoid_radius,
+			Follow_Range: coher_radius * coher_radius,
+			Avoid_Range:  avoid_radius * coher_radius,
 			Flock:        make(map[*Boid]float64),
 		}
 		g.Entities = append(g.Entities, b)
@@ -129,20 +133,20 @@ func (g *Game) Evolve_Game(boids *[]*Boid) {
 
 	var sep, al, coh Tuple // seperation alignment and choesion vectors
 
-	//now := time.Now()
-	g.Set_Centers(boids)
-	g.Set_Velocities(boids)
-	//fmt.Printf("setting took %d ms", time.Since(now).Milliseconds())
-
 	now := time.Now()
+
+	g.Set_Centers(boids)
+	g.Set_Velocities(boids) // set heading and alignment
+
 	for _, b := range *boids {
 
-		g.Set_Flock(boids)
+		g.Set_Flock(b, boids) //, boids)
 		sep = g.Seperation(b, avoidance_factor)
 		al = Alignment(b, alignment_factor)
 		coh = Cohesion(b, coherence_factor)
 
-		b.Velocity = SumTuples(b.Velocity, (SumTuples(sep, al, coh))) // update boid
+		b.Acceleration = SumTuples(sep, al, coh)           // acceleration
+		b.Velocity = SumTuples(b.Velocity, b.Acceleration) // update boid
 
 		if speed := Norm_Squared(b.Velocity); speed > max_speed*max_speed { // enforce max speed
 			speed := math.Sqrt(Norm_Squared(b.Velocity))
@@ -151,24 +155,55 @@ func (g *Game) Evolve_Game(boids *[]*Boid) {
 
 		b.Position = SumTuples(b.Position, b.Velocity)
 
-		Maintain_Bounds(b, g)
+		g.Maintain_Bounds(b)
 
 	}
-	fmt.Printf("updating took %d ms\n", time.Since(now).Milliseconds())
+	fmt.Printf("Evolution too %d ms \n", time.Since(now).Microseconds())
 
 }
 
-func (g *Game) Set_Flock(boids *[]*Boid) { // assign the distances between the boids (distance is symmetric)
+/*
+func (g *Game) Set_Flock(b *Boid, boids *[]*Boid) { // assign the distances between the boids (distance is symmetric) VERY SLOW multithread the entire game not just this.
 
-	for i, b := range *boids {
-		for j, a := range *boids {
-			if i > j {
-				r := math.Sqrt(Distance_Squared(a.Position, b.Position)) //the distance is squared to save on compute.
-				g.Distances[i][j] = r
-				g.Distances[j][i] = r
-			}
+	var wg sync.WaitGroup
+	entities := *boids
+	chunk_size := len(entities) / workers
+	id := b.Id
 
+	for i := 0; i < workers; i++ {
+		start := i * chunk_size
+		end := start + chunk_size
+		if i == workers-1 {
+			end = len(entities)
 		}
+
+		wg.Add(1)
+
+		go func(start, end int) {
+			defer wg.Done()
+			for j := start; j < end; j++ {
+				if j != id {
+					r := Distance_Squared(entities[j].Position, b.Position)
+					g.Distances[id][j] = r
+					g.Distances[j][id] = r
+				}
+			}
+		}(start, end)
+	}
+
+	wg.Wait()
+} */
+
+func (g *Game) Set_Flock(b *Boid, boids *[]*Boid) { // assign the distances between the boids (distance is symmetric)
+	entities := *boids
+	i := b.Id
+	for j := 0; j < len(entities); j++ {
+		if j != i {
+			r := (Distance_Squared(entities[j].Position, b.Position)) //the distance is squared to save on compute.
+			g.Distances[i][j] = r
+			g.Distances[j][i] = r
+		}
+
 	}
 }
 
@@ -219,7 +254,7 @@ func (g *Game) Set_Velocities(boids *[]*Boid) { // sets the precieved average ve
 
 }
 
-func Cohesion(b *Boid, f float64) Tuple { //boids stick together as flocks
+func Cohesion(b *Boid, f float64) Tuple { //follow others
 
 	pos := b.Position
 	p_c := b.Precieved_Center
@@ -229,14 +264,17 @@ func Cohesion(b *Boid, f float64) Tuple { //boids stick together as flocks
 
 }
 
-func (g *Game) Seperation(b *Boid, f float64) Tuple { // boids cant be too cloes together
+func (g *Game) Seperation(b *Boid, f float64) Tuple { //avoid collisions
 
 	s := Tuple{0, 0}
 	i := b.Id
+
 	for j, r := range g.Distances[i] {
 		a := g.Entities[j]
 		if r < b.Avoid_Range {
-			s = Tuple{s.X - (a.Position.X - b.Position.X), s.Y - (a.Position.Y - b.Position.Y)}
+
+			s.X += (b.Position.X - a.Position.X)
+			s.Y += (b.Position.Y - a.Position.Y)
 		}
 	}
 
@@ -244,7 +282,7 @@ func (g *Game) Seperation(b *Boid, f float64) Tuple { // boids cant be too cloes
 	return s
 }
 
-func Alignment(b *Boid, f float64) Tuple { // flocks want to be aligned in the same direction
+func Alignment(b *Boid, f float64) Tuple { // match velocity
 
 	vel := b.Velocity
 	p_v := b.Precieved_Velocity
@@ -253,7 +291,7 @@ func Alignment(b *Boid, f float64) Tuple { // flocks want to be aligned in the s
 
 }
 
-func Maintain_Bounds(b *Boid, g *Game) { // boids cannot leave the screen
+func (g *Game) Maintain_Bounds(b *Boid) { // boids cannot leave the screen
 
 	if b.Position.X < turn_margin {
 		b.Velocity.X += turn_factor
