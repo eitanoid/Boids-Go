@@ -25,18 +25,18 @@ var (
 	//game adjustments
 	coherence_factor float64 = 0.04 //centering
 	alignment_factor float64 = 0.09 //allignment
-	avoidance_factor float64 = 0.05 //seperation
+	avoidance_factor float64 = 0.08 //seperation
 	avoid_radius     float64 = 20   //30
 	coher_radius     float64 = 75   //100
 	max_speed        float64 = 15
-	turn_factor      float64 = 1   // 2//how fast to return a cell that escaped
+	turn_factor      float64 = 0.5 // 2//how fast to return a cell that escaped
 	turn_margin      float64 = 200 //100
-	init_boids       int     = 3000
+	init_boids       int     = 300
 
 	//program adjustments
 	//workers    int     = 2
 	fps_target int     = 60
-	scale      float64 = 2
+	scale      float64 = 1
 	x_bound    float64 = float64(width) * scale
 	y_bound    float64 = float64(height) * scale
 
@@ -93,7 +93,6 @@ func (g *Game) Run() {
 		}
 
 		rl.EndDrawing()
-
 		//now := time.Now()
 		g.Evolve_Game(&g.Entities)
 		//fmt.Printf("evolution took %d ms \n", time.Since(now).Milliseconds())
@@ -122,18 +121,19 @@ func main() {
 
 func (g *Game) Init_Boids(numBoids int) {
 	g.Distances = make([][]float64, numBoids)
+
+	game_width, game_height := float64(g.Width)*scale, float64(g.Height)*scale
 	for i := 0; i < numBoids; i++ {
 		g.Distances[i] = make([]float64, numBoids) // imitiate distance matrix
 		b := &Boid{
 			Id:           i,
-			Position:     Tuple{X: float64(rand.Intn(int(g.Width/2)) + int(g.Width)/4), Y: float64(rand.Intn(int(g.Height/2)) + int(g.Height)/4)},
+			Position:     Tuple{X: float64(rand.Intn(int(game_width/2)) + int(game_width)/4), Y: float64(rand.Intn(int(game_height/2)) + int(game_height)/4)},
 			Velocity:     Tuple{X: float64(rand.Intn(40) - 20), Y: float64(rand.Intn(40) - 20)},
 			Follow_Range: coher_radius * coher_radius,
 			Avoid_Range:  avoid_radius * coher_radius,
 		}
 		g.Entities = append(g.Entities, b)
 	}
-
 }
 
 func (g *Game) Evolve_Game(boids *[]*Boid) {
@@ -142,12 +142,13 @@ func (g *Game) Evolve_Game(boids *[]*Boid) {
 
 	now := time.Now()
 
-	g.Set_Centers(boids)
-	g.Set_Velocities(boids) // set heading and alignment
-
+	// set heading and alignment
+	//g.Set_Centers(boids)
+	//g.Set_Velocities(boids)
 	for _, b := range *boids {
 
 		g.Set_Flock(b, boids) //, boids)
+		g.Set_Prespective(b, boids)
 		sep = g.Seperation(b, avoidance_factor)
 		al = Alignment(b, alignment_factor)
 		coh = Cohesion(b, coherence_factor)
@@ -263,6 +264,37 @@ func (g *Game) Set_Velocities(boids *[]*Boid) { // sets the precieved average ve
 
 }
 
+func (g *Game) Set_Prespective(b *Boid, boids *[]*Boid) {
+
+	p_v := Tuple{0, 0}
+	p_c := Tuple{0, 0}
+	m := 0
+	entities := *boids
+	i := b.Id
+	for j := 0; j < len(entities); j++ {
+		a := g.Entities[j]
+		r := g.Distances[i][j]
+		if r < b.Follow_Range {
+			p_v.X += a.Velocity.X
+			p_v.Y += a.Velocity.Y
+			p_c.X += a.Position.X
+			p_c.Y += a.Position.Y
+			m++
+		}
+	}
+	if m > 1 {
+		b.Precieved_Velocity.X = (p_v.X - b.Velocity.X) / float64(m-1)
+		b.Precieved_Velocity.Y = (p_v.Y - b.Velocity.Y) / float64(m-1)
+
+		b.Precieved_Center.X = (p_c.X - b.Position.X) / float64(m-1)
+		b.Precieved_Center.Y = (p_c.Y - b.Position.Y) / float64(m-1)
+	} else {
+		b.Precieved_Velocity = b.Velocity
+		b.Precieved_Center = b.Position
+	}
+
+}
+
 func Cohesion(b *Boid, f float64) Tuple { //follow others
 
 	pos := b.Position
@@ -325,5 +357,19 @@ func Draw_Boid(b *Boid, scale float64, game_scale float64) { // draw triangle bo
 		rl.Vector2{X: float32(x + scale*math.Cos(alpha-math.Pi*4/5)), Y: float32(y + scale*math.Sin(alpha-math.Pi*4/5))},
 		rl.Vector2{X: float32(x + scale*math.Cos(alpha+math.Pi*4/5)), Y: float32(y + scale*math.Sin(alpha+math.Pi*4/5))},
 		rl.Green)
+
+}
+
+func (g *Game) Add_Boid(pos Tuple) {
+	b := Boid{
+		Id:                 len(g.Entities),
+		Position:           pos,
+		Velocity:           Tuple{0, 0},
+		Precieved_Center:   pos,
+		Precieved_Velocity: Tuple{0, 0},
+		Follow_Range:       coher_radius * coher_radius,
+		Avoid_Range:        avoid_radius * avoid_radius,
+	}
+	g.Entities = append(g.Entities, &b)
 
 }
