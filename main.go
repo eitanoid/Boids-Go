@@ -18,25 +18,26 @@ import (
 // potential concurrency
 // async user input
 // add spatial partitioning to Set_Flock function
-//
+// user input
+// raygui???
 
 var (
 
 	//game adjustments
 	coherence_factor float64 = 0.04 //centering
 	alignment_factor float64 = 0.09 //allignment
-	avoidance_factor float64 = 0.08 //seperation
-	avoid_radius     float64 = 20   //30
-	coher_radius     float64 = 75   //100
+	avoidance_factor float64 = 0.06 //seperation
+	avoid_radius     float64 = 30   //30
+	coher_radius     float64 = 70   //100
 	max_speed        float64 = 15
-	turn_factor      float64 = 0.5 // 2//how fast to return a cell that escaped
-	turn_margin      float64 = 200 //100
-	init_boids       int     = 300
+	turn_factor      float64 = 1   // 2//how fast to return a cell that escaped
+	turn_margin      float64 = 100 //100
+	init_boids       int     = 1000
 
 	//program adjustments
 	//workers    int     = 2
 	fps_target int     = 60
-	scale      float64 = 1
+	scale      float64 = 2
 	x_bound    float64 = float64(width) * scale
 	y_bound    float64 = float64(height) * scale
 
