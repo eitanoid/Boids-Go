@@ -1,6 +1,6 @@
 # What are Boids?
 
-[]
+[!boids](https://github.com/eitanoid/Boids-Go/blob/main/images/image.png)
 
 
 [Boids](https://en.wikipedia.org/wiki/Boids) which stands for bird-like objects, is a flocking simulation initially described by Craig Reynolds in 1986 which is a great example for emergent behaviour.
