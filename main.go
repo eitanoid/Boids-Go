@@ -1,3 +1,6 @@
+//go:build wayland
+// +build wayland
+
 package main
 
 import (
@@ -28,7 +31,7 @@ var (
 	alignment_factor float64 = 0.09 //allignment
 	avoidance_factor float64 = 0.06 //seperation
 	avoid_radius     float64 = 30   //30
-	coher_radius     float64 = 70   //100
+	coher_radius     float64 = 120  //100
 	max_speed        float64 = 15
 	turn_factor      float64 = 1   // 2//how fast to return a cell that escaped
 	turn_margin      float64 = 100 //100
@@ -37,13 +40,13 @@ var (
 	//program adjustments
 	//workers    int     = 2
 	fps_target int     = 60
-	scale      float64 = 2
+	scale      float64 = 3
 	x_bound    float64 = float64(width) * scale
 	y_bound    float64 = float64(height) * scale
 
 	//screen
-	width  int32 = 2400
-	height int32 = 1400
+	width  int32 = 1000
+	height int32 = 500
 )
 
 type Boid struct {

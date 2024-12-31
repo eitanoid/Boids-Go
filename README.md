@@ -1,5 +1,8 @@
 # What are Boids?
 
+[]
+
+
 [Boids](https://en.wikipedia.org/wiki/Boids) which stands for bird-like objects, is a flocking simulation initially described by Craig Reynolds in 1986 which is a great example for emergent behaviour.
 
 Each Boid is an individual agent following a set of rules, give rise to flocking behaviour similar to one observed by real birds, these ruels are:
