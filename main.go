@@ -1,6 +1,3 @@
-//go:build wayland
-// +build wayland
-
 package main
 
 import (
