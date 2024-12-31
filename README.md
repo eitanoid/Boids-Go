@@ -1,6 +1,6 @@
 # What are Boids?
 
-[!boids](https://github.com/eitanoid/Boids-Go/blob/main/images/image.png)
+![boids](https://github.com/eitanoid/Boids-Go/blob/main/images/image.png)
 
 
 [Boids](https://en.wikipedia.org/wiki/Boids) which stands for bird-like objects, is a flocking simulation initially described by Craig Reynolds in 1986 which is a great example for emergent behaviour.
@@ -20,9 +20,14 @@ An implementation of Boids in Go visualised by the `Raylib-Go` game library.
 
 # Installation
 
+After cloning the repo to create an executable binary, run `go build`, or `go build -tags wayland` if on wayland.
+
 # Prerequisites
 
 - Go: This project requires the Go programming language. You can download it from https://golang.org/dl/.
 - Raylib-Go: This project relies on the `Raylib-Go` game library found at https://github.com/gen2brain/raylib-go, to install:
   
   `go get -v -u github.com/gen2brain/raylib-go/raylib`
+
+# Todo:
+- gif to showcase the boids
